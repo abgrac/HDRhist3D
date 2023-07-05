@@ -7,8 +7,8 @@ import { GUI } from 'dat.gui'
 const planeData = {
 	width: 10,
 	height: 5,
-	widthSegments: 512,
-	heightSegments: 256,
+	resX: 512,
+	resY: 256,
 }
 
 const hdrParams = {
@@ -51,12 +51,13 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
 renderer.toneMapping = THREE.LinearToneMapping;
 renderer.toneMappingExposure = hdrParams.exposure;
 
-const controls = new OrbitControls(camera, renderer.domElement)
-controls.screenSpacePanning = true //so that panning up and down doesn't zoom in/out
+const orbit = new OrbitControls(camera, renderer.domElement)
+orbit.screenSpacePanning = true //so that panning up and down doesn't zoom in/out
+orbit.target.set(0, 1, 0);
 //controls.addEventListener('change', render)
 
 // const planeGeometry = new THREE.SphereGeometry(1, planeData.widthSegments, planeData.heightSegments)
-const planeGeometry = new THREE.PlaneGeometry(planeData.width, planeData.height, planeData.widthSegments, planeData.heightSegments)
+const planeGeometry = new THREE.PlaneGeometry(planeData.width, planeData.height, planeData.resX, planeData.resY)
 
 const materialSDR = new THREE.MeshStandardMaterial()
 const materialHDR = new THREE.MeshLambertMaterial()
@@ -85,7 +86,7 @@ materialHDR.displacementBias = -0
 materialHDR.wireframe = true
 materialHDR.side = 2
 materialHDR.transparent = true;
-materialHDR.opacity = 1;
+materialHDR.opacity = 0.1;
 
 const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
 materialHDR.clippingPlanes = [clip];
@@ -169,6 +170,11 @@ document.addEventListener("drop", (event) => {
 // 		.catch(() => { /* Error. Inform the user */ })
 // }
 
+window.addEventListener('keydown', (e) => {
+	if (e.code === 'F9') {
+		console.log(scene);
+	}
+})
 window.addEventListener('resize', onWindowResize, false)
 function onWindowResize() {
 	camera.aspect = window.innerWidth / window.innerHeight
@@ -188,6 +194,8 @@ const optionsSDR = {
 	},
 }
 const dataSDR = {
+	dispScale: 1,
+	dispBias: 0,
 	color: materialSDR.color.getHex(),
 	emissive: materialSDR.emissive.getHex(),
 	roughness: materialSDR.roughness
@@ -202,60 +210,31 @@ const optionsHDR = {
 const dataHDR = {
 	color: materialHDR.color.getHex(),
 	emissive: materialHDR.emissive.getHex(),
-	dispScaleMax: 1,
-	dispScale: 1,
+	dispScale1: 1,
+	dispScale2: 1,
+	dispScale3: 1,
+	dispBias: 0,
+	clipConstant: 1,
 }
 
 const gui = new GUI()
 const guiMain = gui.addFolder('Main')
-guiMain.add(hdrParams, 'exposure', 0, 4, 0.01)
+guiMain.add(hdrParams, 'exposure', 0, 3, 0.01)
 	.onChange((v) => { renderer.toneMappingExposure = v });
+guiMain.add(planeData, 'resX', 1, 2048).name('Res X')
+	.onChange(regeneratePlaneGeometry)
+guiMain.add(planeData, 'resY', 1, 1024).name('Res Y')
+	.onChange(regeneratePlaneGeometry)
 guiMain.open();
-
-const guiSDR = gui.addFolder('SDR')
-guiSDR.add(materialSDR, 'visible')
-guiSDR.add(materialSDR, 'transparent')
-	.onChange(() => materialSDR.needsUpdate = true)
-guiSDR.add(materialSDR, 'opacity', 0, 1, 0.01)
-guiSDR.add(materialSDR, 'depthTest')
-guiSDR.add(materialSDR, 'depthWrite')
-guiSDR.add(materialSDR, 'alphaTest', 0, 1, 0.01)
-	.onChange(() => updateMaterialSDR())
-guiSDR.add(materialSDR, 'side', optionsSDR.side)
-	.onChange(() => updateMaterialSDR())
-
-guiSDR.addColor(dataSDR, 'color').onChange(() => {
-	materialSDR.color.setHex(Number(dataSDR.color.toString().replace('#', '0x')))
-})
-guiSDR.addColor(dataSDR, 'emissive').onChange(() => {
-	materialSDR.emissive.setHex(
-		Number(dataSDR.emissive.toString().replace('#', '0x'))
-	)
-})
-guiSDR.add(materialSDR, 'wireframe')
-guiSDR.add(materialSDR, 'flatShading')
-	.onChange(() => updateMaterialSDR())
-guiSDR.add(materialSDR, 'displacementScale', 0, 1, 0.0001)
-guiSDR.add(materialSDR, 'displacementBias', -1, 1, 0.001)
-
-guiSDR.add(materialSDR, 'roughness', 0, 1)
-guiSDR.open()
 
 
 const guiHDR = gui.addFolder('HDR')
 guiHDR.add(materialHDR, 'visible')
-guiHDR.add(materialHDR, 'transparent')
-	.onChange(() => materialHDR.needsUpdate = true)
-guiHDR.add(materialHDR, 'opacity', 0, 1, 0.01)
-guiHDR.add(materialHDR, 'depthTest')
-guiHDR.add(materialHDR, 'depthWrite')
-guiHDR.add(materialHDR, 'alphaTest', 0, 1, 0.01)
-	.onChange(() => updateMaterialHDR())
-guiHDR.add(materialHDR, 'side', optionsHDR.side)
-	.onChange(() => updateMaterialHDR())
-
-guiHDR.add(light, 'castShadow', light.castShadow);
-
+guiHDR.add(dataHDR, 'dispScale1', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
+guiHDR.add(dataHDR, 'dispScale2', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
+guiHDR.add(dataHDR, 'dispScale3', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
+guiHDR.add(dataHDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialHDR.displacementBias = dataHDR.dispBias })
+guiHDR.add(dataHDR, 'clipConstant', 0, 2, 0.01).name('Clipping').onChange((v) => { clip.constant = -dataHDR.clipConstant })
 guiHDR.addColor(dataHDR, 'color').onChange(() => {
 	materialHDR.color.setHex(Number(dataHDR.color.toString().replace('#', '0x')))
 })
@@ -264,16 +243,53 @@ guiHDR.addColor(dataHDR, 'emissive').onChange(() => {
 		Number(dataHDR.emissive.toString().replace('#', '0x'))
 	)
 })
+guiHDR.add(materialHDR, 'opacity', 0, 1, 0.01)
 // guiHdrFolder.add(materialHDR, 'roughness', 0, 1)
-guiHDR.add(materialHDR, 'wireframe')
-guiHDR.add(materialHDR, 'flatShading')
-	.onChange(() => updateMaterialHDR())
-guiHDR.add(dataHDR, 'dispScaleMax', 0, 10, 0.0001).onChange((v) => { materialHDR.displacementScale = v * dataHDR.dispScale })
-guiHDR.add(dataHDR, 'dispScale', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = v * dataHDR.dispScaleMax })
-guiHDR.add(materialHDR, 'displacementBias', -10, 10, 0.01)
-guiHDR.add(clip, 'constant', -2, 0, 0.01).name('Clipping')
-
+guiHDR.add(light, 'castShadow', light.castShadow);
 guiHDR.open()
+const guiHDRmore = guiHDR.addFolder('More')
+guiHDRmore.add(materialHDR, 'transparent')
+	.onChange(() => materialHDR.needsUpdate = true)
+guiHDRmore.add(materialHDR, 'side', optionsHDR.side)
+	.onChange(() => updateMaterialHDR())
+guiHDRmore.add(materialHDR, 'depthTest')
+guiHDRmore.add(materialHDR, 'depthWrite')
+// guiHDR.add(materialHDR, 'alphaTest', 0, 1, 0.01)
+// .onChange(() => updateMaterialHDR())
+guiHDRmore.add(materialHDR, 'wireframe')
+guiHDRmore.add(materialHDR, 'flatShading')
+	.onChange(() => updateMaterialHDR())
+
+
+
+const guiSDR = gui.addFolder('SDR')
+guiSDR.add(materialSDR, 'visible')
+guiSDR.add(dataSDR, 'dispScale', 0, 1, 0.0001).onChange((v) => { materialSDR.displacementScale = dataSDR.dispScale })
+guiSDR.add(dataSDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialSDR.displacementBias = dataSDR.dispBias })
+guiSDR.add(materialSDR, 'roughness', 0, 1)
+guiSDR.open()
+const guiSDRmore = guiSDR.addFolder('More')
+guiSDRmore.add(materialSDR, 'transparent')
+	.onChange(() => materialSDR.needsUpdate = true)
+guiSDRmore.add(materialSDR, 'opacity', 0, 1, 0.01)
+guiSDRmore.add(materialSDR, 'depthTest')
+guiSDRmore.add(materialSDR, 'depthWrite')
+// guiSDR.add(materialSDR, 'alphaTest', 0, 1, 0.01)
+// .onChange(() => updateMaterialSDR())
+guiSDRmore.add(materialSDR, 'side', optionsSDR.side)
+	.onChange(() => updateMaterialSDR())
+guiSDRmore.addColor(dataSDR, 'color').onChange(() => {
+	materialSDR.color.setHex(Number(dataSDR.color.toString().replace('#', '0x')))
+})
+guiSDRmore.addColor(dataSDR, 'emissive').onChange(() => {
+	materialSDR.emissive.setHex(
+		Number(dataSDR.emissive.toString().replace('#', '0x'))
+	)
+})
+guiSDRmore.add(materialSDR, 'wireframe')
+guiSDRmore.add(materialSDR, 'flatShading')
+	.onChange(() => updateMaterialSDR())
+
 
 function updateMaterialSDR() {
 	materialSDR.side = Number(materialSDR.side)
@@ -284,22 +300,19 @@ function updateMaterialHDR() {
 	materialHDR.needsUpdate = true
 }
 
-const planePropertiesFolder = gui.addFolder('PlaneGeometry')
-//planePropertiesFolder.add(planeData, 'width', 1, 30).onChange(regeneratePlaneGeometry)
-//planePropertiesFolder.add(planeData, 'height', 1, 30).onChange(regeneratePlaneGeometry)
-planePropertiesFolder.add(planeData, 'widthSegments', 1, 2048)
-	.onChange(regeneratePlaneGeometry)
-planePropertiesFolder.add(planeData, 'heightSegments', 1, 1024)
-	.onChange(regeneratePlaneGeometry)
-planePropertiesFolder.open()
+// const planePropertiesFolder = gui.addFolder('PlaneGeometry')
+// //planePropertiesFolder.add(planeData, 'width', 1, 30).onChange(regeneratePlaneGeometry)
+// //planePropertiesFolder.add(planeData, 'height', 1, 30).onChange(regeneratePlaneGeometry)
+
+// planePropertiesFolder.open()
 
 
 function regeneratePlaneGeometry() {
 	const newGeometry = new THREE.PlaneGeometry(
 		planeData.width,
 		planeData.height,
-		planeData.widthSegments,
-		planeData.heightSegments
+		planeData.resX,
+		planeData.resY
 	)
 	planeSDR.geometry.dispose()
 	planeSDR.geometry = newGeometry
@@ -318,10 +331,6 @@ function animate() {
 function render() {
 	renderer.render(scene, camera)
 }
-
-console.log(scene);
-console.log(planeSDR.material);
-console.log(planeHDR.material);
 
 planeSDR.material.onBeforeCompile = (shader) => {
 	console.log(shader);
@@ -344,6 +353,7 @@ planeSDR.material.onBeforeCompile = (shader) => {
 			'	transformed += normalize( objectNormal ) * ( clamp(texture2D( displacementMap, uv ).x, 0.0, 1.0) * displacementScale + displacementBias );			'
 		].join('\n')
 	);
+	console.log(shader);
 };
 
 planeHDR.material.onBeforeCompile = (shader) => {
@@ -392,5 +402,9 @@ planeHDR.material.onBeforeCompile = (shader) => {
 	// 	].join('\n')
 	// );
 };
+
+console.log(scene);
+console.log(planeSDR.material);
+console.log(planeHDR.material);
 
 animate()

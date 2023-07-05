@@ -91,13 +91,18 @@ materialHDR.opacity = 0.1;
 const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
 materialHDR.clippingPlanes = [clip];
 materialHDR.clipIntersection = false;
+materialHDR.toneMapped = false;
 
 
 
 const planeSDR = new THREE.Mesh(planeGeometry, materialSDR).rotateX(-Math.PI * 0.5)
 const planeHDR = new THREE.Mesh(planeGeometry, materialHDR).rotateX(-Math.PI * 0.5)
+const hdrParent = new THREE.Object3D();
+hdrParent.position.set(0, 1, 0);
 scene.add(planeSDR)
 scene.add(planeHDR)
+scene.add(hdrParent)
+hdrParent.attach(planeHDR);
 
 
 
@@ -210,9 +215,9 @@ const optionsHDR = {
 const dataHDR = {
 	color: materialHDR.color.getHex(),
 	emissive: materialHDR.emissive.getHex(),
-	dispScale1: 1,
-	dispScale2: 1,
-	dispScale3: 1,
+	dispScale: 1,
+	hdrScaleUp: 1,
+	hdrScaleDown: 1,
 	dispBias: 0,
 	clipConstant: 1,
 }
@@ -230,11 +235,8 @@ guiMain.open();
 
 const guiHDR = gui.addFolder('HDR')
 guiHDR.add(materialHDR, 'visible')
-guiHDR.add(dataHDR, 'dispScale1', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
-guiHDR.add(dataHDR, 'dispScale2', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
-guiHDR.add(dataHDR, 'dispScale3', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale1 * dataHDR.dispScale2 * dataHDR.dispScale3 })
-guiHDR.add(dataHDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialHDR.displacementBias = dataHDR.dispBias })
-guiHDR.add(dataHDR, 'clipConstant', 0, 2, 0.01).name('Clipping').onChange((v) => { clip.constant = -dataHDR.clipConstant })
+guiHDR.add(dataHDR, 'hdrScaleUp', 0, 100, 0.0001).onChange((v) => { hdrParent.scale.setY(dataHDR.hdrScaleUp * 1 / dataHDR.hdrScaleDown); })
+guiHDR.add(dataHDR, 'hdrScaleDown', 0.0001, 100, 0.0001).onChange((v) => { hdrParent.scale.setY(dataHDR.hdrScaleUp * 1 / dataHDR.hdrScaleDown); })
 guiHDR.addColor(dataHDR, 'color').onChange(() => {
 	materialHDR.color.setHex(Number(dataHDR.color.toString().replace('#', '0x')))
 })
@@ -245,30 +247,36 @@ guiHDR.addColor(dataHDR, 'emissive').onChange(() => {
 })
 guiHDR.add(materialHDR, 'opacity', 0, 1, 0.01)
 // guiHdrFolder.add(materialHDR, 'roughness', 0, 1)
-guiHDR.add(light, 'castShadow', light.castShadow);
 guiHDR.open()
+
 const guiHDRmore = guiHDR.addFolder('More')
+guiHDRmore.add(dataHDR, 'dispScale', 0, 1, 0.0001).onChange((v) => { materialHDR.displacementScale = dataHDR.dispScale })
+guiHDRmore.add(dataHDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialHDR.displacementBias = dataHDR.dispBias })
+guiHDRmore.add(dataHDR, 'clipConstant', 0, 2, 0.01).name('Clipping').onChange((v) => { clip.constant = -dataHDR.clipConstant })
 guiHDRmore.add(materialHDR, 'transparent')
 	.onChange(() => materialHDR.needsUpdate = true)
-guiHDRmore.add(materialHDR, 'side', optionsHDR.side)
 	.onChange(() => updateMaterialHDR())
 guiHDRmore.add(materialHDR, 'depthTest')
 guiHDRmore.add(materialHDR, 'depthWrite')
+guiHDRmore.add(materialHDR, 'side', optionsHDR.side)
 // guiHDR.add(materialHDR, 'alphaTest', 0, 1, 0.01)
 // .onChange(() => updateMaterialHDR())
 guiHDRmore.add(materialHDR, 'wireframe')
 guiHDRmore.add(materialHDR, 'flatShading')
 	.onChange(() => updateMaterialHDR())
+guiHDRmore.add(materialHDR, 'toneMapped')
+guiHDRmore.add(light, 'castShadow', light.castShadow);
 
 
 
 const guiSDR = gui.addFolder('SDR')
 guiSDR.add(materialSDR, 'visible')
-guiSDR.add(dataSDR, 'dispScale', 0, 1, 0.0001).onChange((v) => { materialSDR.displacementScale = dataSDR.dispScale })
-guiSDR.add(dataSDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialSDR.displacementBias = dataSDR.dispBias })
+guiSDR.add(dataSDR, 'dispScale', 0, 1, 0.0001).onChange((v) => { materialSDR.displacementScale = dataSDR.dispScale; materialSDR.displacementBias = 1 - dataSDR.dispScale + dataSDR.dispBias; })
 guiSDR.add(materialSDR, 'roughness', 0, 1)
 guiSDR.open()
+
 const guiSDRmore = guiSDR.addFolder('More')
+guiSDRmore.add(dataSDR, 'dispBias', -1, 1, 0.001).onChange((v) => { materialSDR.displacementBias = 1 - dataSDR.dispScale + dataSDR.dispBias; })
 guiSDRmore.add(materialSDR, 'transparent')
 	.onChange(() => materialSDR.needsUpdate = true)
 guiSDRmore.add(materialSDR, 'opacity', 0, 1, 0.01)

@@ -62,9 +62,10 @@ const planeGeometry = new THREE.PlaneGeometry(planeData.width, planeData.height,
 const materialSDR = new THREE.MeshStandardMaterial()
 const materialHDR = new THREE.MeshLambertMaterial()
 
-//const texture = new THREE.TextureLoader().load("img/grid.png")
-const texture = new THREE.TextureLoader().load('img/earth.jpg')
-const displacementMap = new THREE.TextureLoader().load('img/earth_height.jpg')
+// const texture = new THREE.TextureLoader().load('img/earth.jpg')
+// const displacementMap = new THREE.TextureLoader().load('img/earth_height.jpg')
+const texture = new THREE.TextureLoader().load('img/ph.jpg')
+const displacementMap = new THREE.TextureLoader().load('img/ph.jpg')
 materialSDR.map = texture
 materialSDR.roughness = 0.4
 materialSDR.displacementMap = displacementMap
@@ -414,5 +415,7 @@ planeHDR.material.onBeforeCompile = (shader) => {
 console.log(scene);
 console.log(planeSDR.material);
 console.log(planeHDR.material);
+
+updateHDR('img/ramps.hdr');
 
 animate()
